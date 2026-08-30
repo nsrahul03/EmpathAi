@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+emotion_env/
+
+# macOS
+.DS_Store
+
+# Build files
+build/
+dist/
+*.spec
+
+# Secrets
+.env
+.env.*
+
+# Logs
+*.log
+
+# Large datasets
+fer2013.csv
+
+# IDE
+.vscode/
+.idea/
