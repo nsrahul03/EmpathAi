@@ -29,4 +29,3 @@ pipeline {
         }
     }
 }
-# CI pipeline for Empath AI
