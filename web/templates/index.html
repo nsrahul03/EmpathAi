@@ -1,283 +1,210 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
-
-    <title>EmpathAI</title>
+    <title>Empath AI</title>
 
     <style>
-
-        * {
-            box-sizing: border-box;
-        }
-
         body {
-            margin: 0;
             font-family: Arial, sans-serif;
-            background: #0f172a;
-            color: white;
-            min-height: 100vh;
-
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .container {
-            width: 90%;
-            max-width: 900px;
             text-align: center;
+            margin: 0;
+            padding: 30px;
         }
 
         h1 {
-            font-size: 42px;
             margin-bottom: 10px;
         }
 
-        .subtitle {
-            color: #94a3b8;
-            margin-bottom: 30px;
-        }
-
-        .card {
-            background: #1e293b;
-            padding: 50px;
-            border-radius: 30px;
+        #camera-container {
+            position: relative;
+            display: inline-block;
         }
 
         video {
-            width: 100%;
-            max-width: 700px;
-            border-radius: 15px;
-            background: black;
+            width: 640px;
+            max-width: 90vw;
+            border-radius: 10px;
         }
 
-        .emotion {
-            font-size: 30px;
-            font-weight: bold;
-            margin-top: 25px;
+        #face-box {
+            position: absolute;
+            border: 3px solid lime;
+            display: none;
+            pointer-events: none;
         }
 
-        .confidence {
-            font-size: 18px;
-            color: #94a3b8;
+        #result {
+            margin-top: 20px;
+            font-size: 24px;
+        }
+
+        #status {
             margin-top: 10px;
         }
-
-        button {
-            margin-top: 25px;
-            padding: 12px 25px;
-            border: none;
-            border-radius: 10px;
-            font-size: 16px;
-            cursor: pointer;
-        }
-
-        .status {
-            margin-top: 15px;
-            color: #94a3b8;
-        }
-
     </style>
-
 </head>
-
 
 <body>
 
-<div class="container">
+    <h1>Empath AI</h1>
+    <p>Real-Time Facial Emotion Detection</p>
 
-    <h1>🧠 Empath AI</h1>
+    <div id="camera-container">
 
-    <p class="subtitle">
-        Real-Time Emotion Detection & Interactive AI Assistant
-    </p>
+        <video id="video" autoplay playsinline></video>
 
-
-    <div class="card">
-
-        <video
-            id="camera"
-            autoplay
-            playsinline>
-        </video>
-
-
-        <div class="emotion">
-
-            Detected Emotion:
-            <span id="emotion">—</span>
-
-        </div>
-
-
-        <div class="confidence">
-
-            Confidence:
-            <span id="confidence">—</span>
-
-        </div>
-
-
-        <div class="status" id="status">
-
-            Starting camera...
-
-        </div>
+        <div id="face-box"></div>
 
     </div>
 
-</div>
+    <canvas id="canvas" width="640" height="480" hidden></canvas>
 
+    <div id="result">
+        Emotion: <strong id="emotion">Waiting...</strong>
+        <br>
+        Confidence: <strong id="confidence">0%</strong>
+    </div>
 
-<script>
+    <p id="status">Starting camera...</p>
 
-const video =
-    document.getElementById("camera");
+    <script>
 
-const emotion =
-    document.getElementById("emotion");
+        const video = document.getElementById("video");
+        const canvas = document.getElementById("canvas");
 
-const confidence =
-    document.getElementById("confidence");
+        const emotionText = document.getElementById("emotion");
+        const confidenceText = document.getElementById("confidence");
+        const statusText = document.getElementById("status");
 
-const status =
-    document.getElementById("status");
+        const faceBox = document.getElementById("face-box");
 
+        // Start webcam
+        async function startCamera() {
 
-async function startCamera() {
+            try {
 
-    try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: false
+                });
 
-        const stream =
-            await navigator.mediaDevices.getUserMedia({
-                video: true
-            });
+                video.srcObject = stream;
 
-        video.srcObject = stream;
+                statusText.textContent = "Camera started";
 
-        status.textContent =
-            "Camera started";
+            } catch (error) {
 
-    }
+                statusText.textContent =
+                    "Unable to access camera: " + error.message;
 
-    catch (error) {
-
-        console.error(error);
-
-        status.textContent =
-            "Camera permission denied";
-
-    }
-
-}
-
-
-async function detectEmotion() {
-
-    if (video.readyState < 2) {
-        return;
-    }
-
-
-    const canvas =
-        document.createElement("canvas");
-
-
-    canvas.width = 320;
-    canvas.height = 240;
-
-
-    const context =
-        canvas.getContext("2d");
-
-
-    context.drawImage(
-        video,
-        0,
-        0,
-        canvas.width,
-        canvas.height
-    );
-
-
-    const image =
-        canvas.toDataURL("image/jpeg");
-
-
-    try {
-
-        const response =
-            await fetch("/predict", {
-
-                method: "POST",
-
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
-
-                body: JSON.stringify({
-                    image: image
-                })
-
-            });
-
-
-        const data =
-            await response.json();
-
-
-        if (data.error) {
-
-            console.error(data.error);
-
-            return;
-
+            }
         }
 
 
-        emotion.textContent =
-            data.emotion;
+        // Send webcam frame to Flask
+        async function detectEmotion() {
+
+            if (video.readyState !== 4) {
+                return;
+            }
+
+            const context = canvas.getContext("2d");
+
+            // Draw current webcam frame
+            context.drawImage(
+                video,
+                0,
+                0,
+                canvas.width,
+                canvas.height
+            );
+
+            // Convert image to base64
+            const image = canvas.toDataURL("image/jpeg");
+
+            try {
+
+                const response = await fetch("/predict", {
+
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+
+                    body: JSON.stringify({
+                        image: image
+                    })
+
+                });
+
+                const result = await response.json();
 
 
-        confidence.textContent =
-            data.confidence + "%";
+                // No face detected
+                if (!result.face_detected) {
+
+                    emotionText.textContent = "No face detected";
+                    confidenceText.textContent = "0%";
+
+                    faceBox.style.display = "none";
+
+                    statusText.textContent =
+                        "Please place your face in front of the camera.";
+
+                    return;
+                }
 
 
-        status.textContent =
-            "Emotion detection active";
+                // Display emotion
+                emotionText.textContent = result.emotion;
 
-    }
+                confidenceText.textContent =
+                    result.confidence + "%";
 
-    catch (error) {
-
-        console.error(error);
-
-        status.textContent =
-            "Prediction server error";
-
-    }
-
-}
+                statusText.textContent =
+                    "Face detected successfully";
 
 
-startCamera();
+                // Display face rectangle
+                const face = result.face;
 
-setInterval(
-    detectEmotion,
-    1000
-);
+                const scaleX = video.clientWidth / canvas.width;
+                const scaleY = video.clientHeight / canvas.height;
 
-</script>
+                faceBox.style.display = "block";
+
+                faceBox.style.left =
+                    (face.x * scaleX) + "px";
+
+                faceBox.style.top =
+                    (face.y * scaleY) + "px";
+
+                faceBox.style.width =
+                    (face.width * scaleX) + "px";
+
+                faceBox.style.height =
+                    (face.height * scaleY) + "px";
+
+
+            } catch (error) {
+
+                statusText.textContent =
+                    "Prediction error: " + error.message;
+
+            }
+        }
+
+
+        startCamera();
+
+        // Detect emotion every second
+        setInterval(detectEmotion, 1000);
+
+    </script>
 
 </body>
-
 </html>

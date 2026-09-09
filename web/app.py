@@ -1,27 +1,18 @@
 from flask import Flask, render_template, request, jsonify
-from tensorflow.keras.models import load_model
-from PIL import Image
+import cv2
 import numpy as np
 import base64
+from PIL import Image
 import io
-import os
-
+import tensorflow as tf
 
 app = Flask(__name__)
 
-# --------------------------------------------------
-# Model configuration
-# --------------------------------------------------
+# Load trained emotion model
+MODEL_PATH = "fer2013_best_model.keras"
+model = tf.keras.models.load_model(MODEL_PATH)
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-MODEL_PATH = os.path.join(
-    BASE_DIR,
-    "fer2013_best_model.keras"
-)
-
-model = load_model(MODEL_PATH, compile=False)
-
+# Emotion labels
 EMOTIONS = [
     "Angry",
     "Disgust",
@@ -32,10 +23,11 @@ EMOTIONS = [
     "Neutral"
 ]
 
+# OpenCV Haar Cascade for face detection
+FACE_CASCADE = cv2.CascadeClassifier(
+    cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+)
 
-# --------------------------------------------------
-# Routes
-# --------------------------------------------------
 
 @app.route("/")
 def home():
@@ -44,77 +36,86 @@ def home():
 
 @app.route("/predict", methods=["POST"])
 def predict():
-
     try:
         data = request.get_json()
 
-        image_data = data["image"]
+        if not data or "image" not in data:
+            return jsonify({"error": "No image received"}), 400
 
-        # Remove the base64 header
-        image_data = image_data.split(",", 1)[1]
+        # Remove base64 header
+        image_data = data["image"].split(",")[1]
 
-        # Decode image
+        # Decode base64 image
         image_bytes = base64.b64decode(image_data)
 
-        image = Image.open(
-            io.BytesIO(image_bytes)
-        ).convert("L")
+        # Convert image to OpenCV format
+        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        frame = np.array(image)
 
-        # Resize to FER2013 model input
-        image = image.resize((48, 48))
+        # Convert RGB to grayscale
+        gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
 
-        # Convert to NumPy array
-        image_array = np.array(image, dtype=np.float32)
-
-        # Normalize
-        image_array = image_array / 255.0
-
-        # Model expects:
-        # (batch, height, width, channels)
-        image_array = image_array.reshape(
-            1, 48, 48, 1
+        # Detect faces
+        faces = FACE_CASCADE.detectMultiScale(
+            gray,
+            scaleFactor=1.3,
+            minNeighbors=5,
+            minSize=(60, 60)
         )
 
-        # Prediction
-        predictions = model.predict(
-            image_array,
-            verbose=0
+        # No face detected
+        if len(faces) == 0:
+            return jsonify({
+                "face_detected": False,
+                "emotion": "No face detected",
+                "confidence": 0
+            })
+
+        # Select the largest face
+        largest_face = max(
+            faces,
+            key=lambda rect: rect[2] * rect[3]
         )
 
-        emotion_index = int(
-            np.argmax(predictions[0])
-        )
+        x, y, w, h = largest_face
 
+        # Crop only the detected face
+        face = gray[y:y + h, x:x + w]
+
+        # Resize to CNN input size
+        face = cv2.resize(face, (48, 48))
+
+        # Normalize pixel values
+        face = face.astype("float32") / 255.0
+
+        # Reshape for CNN
+        face = np.expand_dims(face, axis=0)
+        face = np.expand_dims(face, axis=-1)
+
+        # Predict emotion
+        predictions = model.predict(face, verbose=0)
+
+        emotion_index = np.argmax(predictions[0])
         emotion = EMOTIONS[emotion_index]
-
-        confidence = float(
-            predictions[0][emotion_index]
-        )
+        confidence = float(predictions[0][emotion_index]) * 100
 
         return jsonify({
+            "face_detected": True,
             "emotion": emotion,
-            "confidence": round(
-                confidence * 100,
-                2
-            )
+            "confidence": round(confidence, 2),
+            "face": {
+                "x": int(x),
+                "y": int(y),
+                "width": int(w),
+                "height": int(h)
+            }
         })
 
     except Exception as e:
-
         return jsonify({
             "error": str(e)
         }), 500
 
 
-# --------------------------------------------------
-# Run application
-# --------------------------------------------------
-
 if __name__ == "__main__":
-
-    app.run(
-        host="127.0.0.1",
-        port=5000,
-        debug=True
-    )
-
+    app.run(host="127.0.0.1", port=5000, debug=True)
