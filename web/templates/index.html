@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Empath AI</title>
+
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;padding:25px;font-family:Arial,sans-serif;color:#fff;
+ background:linear-gradient(135deg,#070b14,#111827);
+ min-height:100vh;text-align:center
+}
+h1{margin:0;font-size:30px}
+.sub{color:#94a3b8;margin:8px 0 25px}
+.app{max-width:1000px;margin:auto}
+.dashboard{
+ display:grid;grid-template-columns:2fr 1fr;gap:20px
+}
+.card{
+ background:#111827cc;border:1px solid #ffffff15;
+ border-radius:18px;padding:18px;box-shadow:0 15px 40px #0005
+}
+#camera-container{
+ position:relative;width:100%;aspect-ratio:4/3;
+ overflow:hidden;border-radius:12px;background:#000
+}
+video{width:100%;height:100%;object-fit:cover}
+#face-box{
+ position:absolute;border:2px solid #22d3ee;border-radius:8px;
+ display:none;pointer-events:none
+}
+.label{
+ color:#94a3b8;font-size:12px;text-transform:uppercase;
+ letter-spacing:1px
+}
+#emotion{
+ font-size:38px;font-weight:bold;margin:15px 0 25px
+}
+#confidence{font-size:20px}
+.bar{
+ height:7px;background:#334155;border-radius:10px;
+ margin-top:10px;overflow:hidden
+}
+#confidence-bar{
+ height:100%;width:0;
+ background:linear-gradient(90deg,#7c3aed,#06b6d4);
+ transition:.3s
+}
+#status{
+ color:#94a3b8;font-size:13px;margin-top:15px
+}
+.info{
+ display:flex;justify-content:space-around;
+ margin-top:18px;color:#94a3b8;font-size:12px
+}
+.live{color:#22c55e;font-size:12px;margin-bottom:15px}
+footer{color:#64748b;font-size:11px;margin-top:25px}
+
+@media(max-width:700px){
+ .dashboard{grid-template-columns:1fr}
+ .info{display:none}
+}
+</style>
+</head>
+
+<body>
+<div class="app">
+
+<h1>Empath AI</h1>
+<p class="sub">Real-Time Facial Emotion Detection</p>
+
+<div class="dashboard">
+
+<!-- CAMERA -->
+<div class="card">
+<div class="live">● LIVE ANALYSIS</div>
+
+<div id="camera-container">
+<video id="video" autoplay playsinline></video>
+<div id="face-box"></div>
+</div>
+
+<canvas id="canvas" width="640" height="480" hidden></canvas>
+<p id="status">Starting camera...</p>
+</div>
+
+<!-- RESULT -->
+<div class="card">
+<div class="label">Detected Emotion</div>
+<div id="emotion">Waiting...</div>
+
+<div class="label">Confidence</div>
+<div id="confidence">0%</div>
+
+<div class="bar">
+<div id="confidence-bar"></div>
+</div>
+
+<p id="message">Initializing AI analysis...</p>
+</div>
+
+</div>
+
+<div class="info">
+<span>⚡ Real-Time Detection</span>
+<span>◉ Face Tracking</span>
+<span>🔒 Privacy Focused</span>
+</div>
+
+<footer>Empath AI • Intelligent Emotion Analysis</footer>
+
+</div>
+
+<script>
+const video=document.getElementById("video"),
+canvas=document.getElementById("canvas"),
+emotion=document.getElementById("emotion"),
+confidence=document.getElementById("confidence"),
+bar=document.getElementById("confidence-bar"),
+status=document.getElementById("status"),
+message=document.getElementById("message"),
+box=document.getElementById("face-box");
+
+async function start(){
+ try{
+  video.srcObject=await navigator.mediaDevices.getUserMedia({
+   video:true,audio:false
+  });
+  status.textContent="Camera connected • Analysis active";
+  message.textContent="Looking for a face...";
+ }catch(e){
+  status.textContent="Unable to access camera";
+  message.textContent=e.message;
+ }
+}
+
+async function detect(){
+ if(video.readyState!==4)return;
+
+ canvas.getContext("2d").drawImage(video,0,0,640,480);
+
+ try{
+  const r=await fetch("/predict",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({image:canvas.toDataURL("image/jpeg")})
+  });
+
+  const data=await r.json();
+
+  if(!data.face_detected){
+   emotion.textContent="No face";
+   confidence.textContent="0%";
+   bar.style.width="0";
+   box.style.display="none";
+   status.textContent="No face detected";
+   message.textContent="Please position your face in front of the camera.";
+   return;
+  }
+
+  let c=Math.max(0,Math.min(100,Number(data.confidence)||0));
+
+  emotion.textContent=data.emotion;
+  confidence.textContent=c+"%";
+  bar.style.width=c+"%";
+  status.textContent="Face detected • Analysis active";
+  message.textContent="Emotion detected successfully";
+
+  const f=data.face,
+        sx=video.clientWidth/640,
+        sy=video.clientHeight/480;
+
+  box.style.display="block";
+  box.style.left=f.x*sx+"px";
+  box.style.top=f.y*sy+"px";
+  box.style.width=f.width*sx+"px";
+  box.style.height=f.height*sy+"px";
+
+ }catch(e){
+  status.textContent="Prediction server error";
+  message.textContent="Unable to connect to /predict";
+ }
+}
+
+start();
+setInterval(detect,1000);
+</script>
+
+</body>
+</html>
