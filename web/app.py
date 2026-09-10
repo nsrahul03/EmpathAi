@@ -8,7 +8,7 @@ import tensorflow as tf
 
 app = Flask(__name__)
 
-# Load trained emotion model
+# Load trained emotion models
 MODEL_PATH = "fer2013_best_model.keras"
 model = tf.keras.models.load_model(MODEL_PATH)
 
