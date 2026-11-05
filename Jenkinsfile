@@ -1,8 +1,11 @@
 pipeline {
+
     agent any
 
     environment {
         DOCKER = '/Users/shivarahulneelam/.docker/bin/docker'
+        PYTHON = '/opt/homebrew/bin/python3.11'
+
         IMAGE_NAME = 'empath-ai:1.0'
         CONTAINER_NAME = 'empath-ai-container'
     }
@@ -17,20 +20,27 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                sh '/opt/homebrew/bin/python3.11 -m pip install pytest'
+                sh '''
+                    $PYTHON -m pip install pytest selenium
+                '''
             }
         }
 
-        stage('Run Tests') {
+        stage('Unit Testing') {
             steps {
-                sh '/opt/homebrew/bin/python3.11 -m pytest -v'
+                sh '''
+                    $PYTHON -m pytest -v test_app.py
+                '''
             }
         }
 
         stage('Build Verification') {
             steps {
-                sh '/opt/homebrew/bin/python3.11 -m py_compile web/app.py'
-                echo 'Application build verification successful'
+                sh '''
+                    $PYTHON -m py_compile web/app.py
+                '''
+
+                echo 'Application build successful'
             }
         }
 
@@ -59,12 +69,39 @@ pipeline {
         stage('Deployment Verification') {
             steps {
                 sh '''
-                    sleep 10
+                    sleep 15
+
                     $DOCKER ps
+
                     curl --fail http://localhost:5002/
                 '''
-                echo 'Deployment successful!'
+
+                echo 'Deployment successful'
             }
+        }
+
+        stage('Selenium UI Testing') {
+            steps {
+                sh '''
+                    $PYTHON -m pytest -v selenium_ui_test.py
+                '''
+            }
+        }
+
+    }
+
+    post {
+        always {
+            archiveArtifacts artifacts: 'selenium_empath_ai.png',
+                             allowEmptyArchive: true
+        }
+
+        success {
+            echo 'EMPATH AI CI/CD PIPELINE COMPLETED SUCCESSFULLY'
+        }
+
+        failure {
+            echo 'PIPELINE FAILED - CHECK CONSOLE OUTPUT'
         }
     }
 }
