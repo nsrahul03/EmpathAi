@@ -81,12 +81,10 @@ pipeline {
         }
 
         stage('Selenium UI Testing') {
-            steps {
-                sh '''
-                    $PYTHON -m pytest -v selenium_ui_test.py
-                '''
-            }
-        }
+    steps {
+        sh '/opt/homebrew/bin/python3.11 -m pytest -v test_selenium.py'
+    }
+}
 
     }
 
