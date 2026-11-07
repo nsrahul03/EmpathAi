@@ -1,19 +1,3 @@
-Yes. Your mam is asking for a README.md file in your GitHub repository. This is an important part of your DevOps project because it explains what Empath AI does, the technologies used, how to run it, and how your CI/CD pipeline works.
-
-I’ll give you a professional, ready-to-copy README for your existing Empath AI project.
-
-1. Create the README.md file
-
-Open Terminal and execute:
-
-cd ~/Desktop/EmpathAi-Jenkins
-touch README.md
-open -e README.md
-
-Copy the following content into the file.
-
-2. README.md content
-
 Empath AI – Facial Emotion Detection System
 
 1. Project Overview
